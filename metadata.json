@@ -1,0 +1,5 @@
+{
+  "name": "3R Journal",
+  "description": "A Neumorphic journal app based on the 3R method (Record, Reflect, Rewire).",
+  "requestFramePermissions": ["microphone"]
+}
