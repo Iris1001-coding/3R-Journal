@@ -83,10 +83,10 @@ const NeuButton = ({ children, onClick, className = '', active = false, disabled
   );
 };
 
-const NeuInput = ({ value, onChange, placeholder, className = '', multiline = false, onMicClick, isRecording, onFocus }: any) => {
+const NeuInput = ({ value, onChange, placeholder, className = '', wrapperClassName = '', multiline = false, onMicClick, isRecording, onFocus }: any) => {
   const Component = multiline ? 'textarea' : 'input';
   return (
-    <div className="relative w-full">
+    <div className={`relative w-full ${wrapperClassName}`}>
       <Component
         value={value}
         onChange={onChange}
@@ -297,6 +297,155 @@ const FocusTab = ({ rewireTask, rewireStreak, isCheckedInToday, handleCheckIn, h
             </NeuCard>
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+const RecordTab = ({ inputs, setInputs, activeInput, setActiveInput, currentEmotion, setCurrentEmotion, handleAddRecord, isRecording, toggleRecording, speechSupported, isCardDrawnToday, dailyKeyword, setDailyKeyword, handleDrawCard }: any) => {
+  const [[page, direction], setPage] = useState([0, 0]);
+  const cardIndex = Math.max(0, Math.min(page, 2));
+
+  const paginate = (newDirection: number) => {
+    const next = page + newDirection;
+    if (next >= 0 && next <= 2) {
+      setPage([next, newDirection]);
+      const nextInputId = ['thoughts', 'emotions', 'doubts'][next];
+      setActiveInput(nextInputId);
+    }
+  };
+
+  const variants = {
+    enter: (direction: number) => ({ x: direction > 0 ? '100%' : '-100%', opacity: 0, scale: 0.8, rotateY: direction > 0 ? 20 : -20 }),
+    center: { zIndex: 1, x: 0, opacity: 1, scale: 1, rotateY: 0 },
+    exit: (direction: number) => ({ zIndex: 0, x: direction < 0 ? '100%' : '-100%', opacity: 0, scale: 0.8, rotateY: direction < 0 ? 20 : -20 })
+  };
+
+  const cards = [
+    { id: 'thoughts', title: 'Thoughts', icon: <Sparkles size={18} />, placeholder: 'What are your thoughts right now?' },
+    { id: 'emotions', title: 'Emotions', icon: <Heart size={18} />, placeholder: 'How are you feeling?' },
+    { id: 'doubts', title: 'Doubts', icon: <Droplet size={18} />, placeholder: 'What are your doubts or confusions?' },
+  ];
+
+  return (
+    <div className="flex-1 flex flex-col h-full px-6 pb-6 pt-4 overflow-hidden">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-4 shrink-0">
+        <h2 className="text-sm font-bold uppercase tracking-wider opacity-70 flex items-center gap-2">
+          <Edit3 size={16} /> Record
+        </h2>
+        <NeuButton className="!px-4 !py-2 text-xs flex items-center gap-1" onClick={handleDrawCard} disabled={isCardDrawnToday} active={isCardDrawnToday}>
+          <Sparkles size={14} /> {isCardDrawnToday ? 'Drawn' : 'Draw Card'}
+        </NeuButton>
+      </div>
+
+      {/* Keyword */}
+      {isCardDrawnToday && dailyKeyword && (
+        <div className="relative text-center py-3 px-4 mb-4 rounded-2xl neu-pressed text-sm font-medium opacity-80 flex items-center justify-center shrink-0">
+          <span>Keyword: <span className="font-black tracking-widest uppercase ml-2" style={{ color: 'var(--accent-color)' }}>{dailyKeyword.word}</span></span>
+          <button onClick={() => setDailyKeyword(null)} className="absolute right-3 p-1.5 rounded-full hover:bg-black/5 transition-colors"><X size={16} /></button>
+        </div>
+      )}
+
+      {/* Card Deck */}
+      <div className="relative flex-1 w-full flex items-center justify-center" style={{ perspective: 1000 }}>
+        <AnimatePresence initial={false} custom={direction} mode="popLayout">
+          <motion.div
+            key={page}
+            custom={direction}
+            variants={variants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ x: { type: "spring", stiffness: 300, damping: 30 }, opacity: { duration: 0.2 }, rotateY: { duration: 0.4 } }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={1}
+            onDragEnd={(e, { offset, velocity }) => {
+              const swipe = Math.abs(offset.x) * velocity.x;
+              if (swipe < -10000 || offset.x < -50) paginate(1);
+              else if (swipe > 10000 || offset.x > 50) paginate(-1);
+            }}
+            className="absolute w-full h-full py-2 flex flex-col"
+          >
+            <NeuCard className="w-full h-full flex flex-col gap-4 !p-6">
+              <div className="flex items-center justify-between opacity-60 mb-2 shrink-0">
+                <div className="flex items-center gap-2 font-black uppercase tracking-widest text-sm">
+                  {cards[cardIndex].icon} {cards[cardIndex].title}
+                </div>
+                <span className="text-xs font-bold">{cardIndex + 1} / 3</span>
+              </div>
+              
+              <NeuInput
+                multiline
+                wrapperClassName="flex-1 flex flex-col min-h-0"
+                className="flex-1 h-full"
+                value={inputs[cards[cardIndex].id as keyof typeof inputs]}
+                onChange={(e: any) => setInputs((prev: any) => ({ ...prev, [cards[cardIndex].id]: e.target.value }))}
+                placeholder={cards[cardIndex].placeholder}
+                onMicClick={speechSupported ? () => { setActiveInput(cards[cardIndex].id); toggleRecording(); } : undefined}
+                isRecording={isRecording && activeInput === cards[cardIndex].id}
+                onFocus={() => setActiveInput(cards[cardIndex].id)}
+              />
+
+              {cards[cardIndex].id === 'emotions' && (
+                <div className="flex items-center justify-between px-2 mt-2 pt-4 border-t border-black/5 dark:border-white/5 shrink-0">
+                  <span className="text-[10px] font-bold opacity-60 uppercase tracking-wider">Color</span>
+                  <div className="flex gap-2">
+                    {EMOTIONS.map(emo => (
+                      <button
+                        key={emo.id}
+                        onClick={() => setCurrentEmotion(emo.color)}
+                        className={`w-8 h-8 rounded-full transition-all ${currentEmotion === emo.color ? 'neu-pressed scale-110' : 'neu-flat hover:scale-110'}`}
+                        style={{ backgroundColor: emo.color === 'transparent' ? 'var(--bg-color)' : emo.color }}
+                        title={emo.label}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </NeuCard>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Navigation Chevrons */}
+        <div className="absolute inset-y-0 -left-2 flex items-center z-10 pointer-events-none">
+           <button onClick={() => paginate(-1)} disabled={page === 0} className={`p-2 rounded-full neu-convex pointer-events-auto transition-opacity ${page === 0 ? 'opacity-0' : 'opacity-100'}`}><ChevronLeft size={20}/></button>
+        </div>
+        <div className="absolute inset-y-0 -right-2 flex items-center z-10 pointer-events-none">
+           <button onClick={() => paginate(1)} disabled={page === 2} className={`p-2 rounded-full neu-convex pointer-events-auto transition-opacity ${page === 2 ? 'opacity-0' : 'opacity-100'}`}><ChevronRight size={20}/></button>
+        </div>
+      </div>
+
+      {/* Footer controls */}
+      <div className="shrink-0 mt-6 flex flex-col gap-5">
+        {/* Dots */}
+        <div className="flex justify-center gap-4">
+          {[0, 1, 2].map(idx => (
+            <button 
+              key={idx} 
+              onClick={() => {
+                const dir = idx > page ? 1 : -1;
+                if (idx !== page) {
+                  setPage([idx, dir]);
+                  setActiveInput(['thoughts', 'emotions', 'doubts'][idx] as any);
+                }
+              }}
+              className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${page === idx ? 'neu-convex bg-[var(--accent-color)] scale-125' : 'neu-pressed opacity-50'}`}
+            />
+          ))}
+        </div>
+        
+        <NeuButton 
+          onClick={() => {
+            handleAddRecord();
+            setPage([0, -1]);
+          }}
+          disabled={!inputs.thoughts.trim() && !inputs.emotions.trim() && !inputs.doubts.trim()}
+          className="w-full flex justify-center items-center gap-2 !py-4"
+        >
+          <Plus size={20} /> Save Record
+        </NeuButton>
       </div>
     </div>
   );
@@ -573,101 +722,24 @@ export default function App() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
                 transition={{ duration: 0.3 }}
-                className="absolute inset-0 overflow-y-auto px-6 pb-6"
+                className="absolute inset-0 overflow-hidden"
               >
-                <div className="flex justify-between items-center mb-6 mt-4">
-                  <h2 className="text-sm font-bold uppercase tracking-wider opacity-70 flex items-center gap-2">
-                    <Edit3 size={16} /> Record: Daily Log
-                  </h2>
-                  <NeuButton 
-                    className="!px-4 !py-2 text-xs flex items-center gap-1"
-                    onClick={handleDrawCard}
-                    disabled={isCardDrawnToday}
-                    active={isCardDrawnToday}
-                  >
-                    <Sparkles size={14} />
-                    {isCardDrawnToday ? 'Drawn' : 'Draw Card'}
-                  </NeuButton>
-                </div>
-
-                <NeuCard className="flex flex-col gap-6">
-                  {isCardDrawnToday && dailyKeyword && (
-                    <div className="relative text-center py-3 px-4 rounded-2xl neu-pressed text-sm font-medium opacity-80 flex items-center justify-center">
-                      <span>Today's Keyword: <span className="font-black tracking-widest uppercase ml-2" style={{ color: 'var(--accent-color)' }}>{dailyKeyword.word}</span></span>
-                      <button 
-                        onClick={() => setDailyKeyword(null)}
-                        className="absolute right-3 p-1.5 rounded-full hover:bg-black/5 transition-colors"
-                        title="Remove keyword"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  )}
-                  
-                  <div className="flex flex-col gap-5">
-                    <div>
-                      <h3 className="text-xs font-bold uppercase opacity-60 mb-2 ml-2">Thoughts</h3>
-                      <NeuInput
-                        multiline
-                        value={inputs.thoughts}
-                        onChange={(e: any) => setInputs(prev => ({ ...prev, thoughts: e.target.value }))}
-                        placeholder="What are your thoughts right now?"
-                        onMicClick={speechSupported ? () => { setActiveInput('thoughts'); toggleRecording(); } : undefined}
-                        isRecording={isRecording && activeInput === 'thoughts'}
-                        onFocus={() => setActiveInput('thoughts')}
-                      />
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-xs font-bold uppercase opacity-60 mb-2 ml-2">Emotions</h3>
-                      <NeuInput
-                        multiline
-                        value={inputs.emotions}
-                        onChange={(e: any) => setInputs(prev => ({ ...prev, emotions: e.target.value }))}
-                        placeholder="How are you feeling?"
-                        onMicClick={speechSupported ? () => { setActiveInput('emotions'); toggleRecording(); } : undefined}
-                        isRecording={isRecording && activeInput === 'emotions'}
-                        onFocus={() => setActiveInput('emotions')}
-                      />
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-xs font-bold uppercase opacity-60 mb-2 ml-2">Doubts</h3>
-                      <NeuInput
-                        multiline
-                        value={inputs.doubts}
-                        onChange={(e: any) => setInputs(prev => ({ ...prev, doubts: e.target.value }))}
-                        placeholder="What are your doubts or confusions?"
-                        onMicClick={speechSupported ? () => { setActiveInput('doubts'); toggleRecording(); } : undefined}
-                        isRecording={isRecording && activeInput === 'doubts'}
-                        onFocus={() => setActiveInput('doubts')}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between px-2 mt-2">
-                      <span className="text-xs font-bold opacity-60 flex items-center gap-1 uppercase tracking-wider"><Droplet size={14}/> Emotion Color</span>
-                      <div className="flex gap-3">
-                        {EMOTIONS.map(emo => (
-                          <button
-                            key={emo.id}
-                            onClick={() => setCurrentEmotion(emo.color)}
-                            className={`w-8 h-8 rounded-full transition-all ${currentEmotion === emo.color ? 'neu-pressed scale-110' : 'neu-flat hover:scale-110'}`}
-                            style={{ backgroundColor: emo.color === 'transparent' ? 'var(--bg-color)' : emo.color }}
-                            title={emo.label}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <NeuButton 
-                      onClick={handleAddRecord}
-                      disabled={!inputs.thoughts.trim() && !inputs.emotions.trim() && !inputs.doubts.trim()}
-                      className="w-full flex justify-center items-center gap-2 mt-4 !py-4"
-                    >
-                      <Plus size={20} /> Save Record
-                    </NeuButton>
-                  </div>
-                </NeuCard>
+                <RecordTab 
+                  inputs={inputs}
+                  setInputs={setInputs}
+                  activeInput={activeInput}
+                  setActiveInput={setActiveInput}
+                  currentEmotion={currentEmotion}
+                  setCurrentEmotion={setCurrentEmotion}
+                  handleAddRecord={handleAddRecord}
+                  isRecording={isRecording}
+                  toggleRecording={toggleRecording}
+                  speechSupported={speechSupported}
+                  isCardDrawnToday={isCardDrawnToday}
+                  dailyKeyword={dailyKeyword}
+                  setDailyKeyword={setDailyKeyword}
+                  handleDrawCard={handleDrawCard}
+                />
               </motion.div>
             )}
 
